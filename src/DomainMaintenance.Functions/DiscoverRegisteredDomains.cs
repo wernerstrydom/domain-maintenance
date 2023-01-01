@@ -106,17 +106,28 @@ namespace DomainMaintenance.Functions
             {
                 log.LogInformation("The environment variable AWS_ACCESS_KEY_ID doesn't exist");
             }
+            else
+            {
+                log.LogInformation("The environment variable AWS_ACCESS_KEY_ID is set");
+            }
 
             if (string.IsNullOrWhiteSpace(secretAccessKey))
             {
                 log.LogInformation("The environment variable AWS_SECRET_ACCESS_KEY doesn't exist");
+            }
+            else
+            {
+                log.LogInformation("The environment variable AWS_SECRET_ACCESS_KEY is set");
             }
 
             if (string.IsNullOrWhiteSpace(region))
             {
                 log.LogInformation("The environment variable AWS_DEFAULT_REGION doesn't exist");
             }
-
+            else
+            {
+                log.LogInformation("The environment variable AWS_DEFAULT_REGION is set");
+            }
 
             AmazonRoute53DomainsClient client = new AmazonRoute53DomainsClient();
             var domains = new Dictionary<string, RegisteredDomain>();
