@@ -16,17 +16,26 @@ using Amazon.Route53Domains.Model;
 
 namespace DomainMaintenance.Functions
 {
+    public static class Constant
+    {
+#if DEBUG
+        public const string CronExpression = "0/30 * * * * *";
+#else
+        public const string CronExpression = "0 0 19 * * *";
+#endif
+        public const string DomainsTableName = "domains";
+    }
+
     public class DiscoverRegisteredDomains
     {
         [FunctionName("DiscoverRegisteredDomains")]
-
         public async Task Run(
-            [TimerTrigger("0 0 19 * * *")] TimerInfo timer,
-            [Table("domains")] TableClient table,
+            [TimerTrigger(Constant.CronExpression)] TimerInfo timer,
+            [Table(Constant.DomainsTableName)] TableClient table,
             CancellationToken cancellationToken,
             ILogger log)
         {
-            var registered = await DiscoverDomains(cancellationToken);
+            var registered = await DiscoverDomains(log,cancellationToken);
 
             // we're using the table as a cache to know which domains we processed before
             var cached = await table.QueryAsync<RegisteredDomain>(maxPerPage: 1000).ToDictionaryAsync(d => d.DomainName).ConfigureAwait(false);
@@ -87,14 +96,32 @@ namespace DomainMaintenance.Functions
         }
 
 
-        private static async Task<Dictionary<string, RegisteredDomain>> DiscoverDomains(CancellationToken cancellationToken)
+        private static async Task<Dictionary<string, RegisteredDomain>> DiscoverDomains(ILogger log, CancellationToken cancellationToken)
         {
+            var accessKeyId = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID");
+            var secretAccessKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY");
+            var region = Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION");
+
+            if (string.IsNullOrWhiteSpace(accessKeyId))
+            {
+                log.LogInformation("The environment variable AWS_ACCESS_KEY_ID doesn't exist");
+            }
+
+            if (string.IsNullOrWhiteSpace(secretAccessKey))
+            {
+                log.LogInformation("The environment variable AWS_SECRET_ACCESS_KEY doesn't exist");
+            }
+
+            if (string.IsNullOrWhiteSpace(region))
+            {
+                log.LogInformation("The environment variable AWS_DEFAULT_REGION doesn't exist");
+            }
+
+
+            AmazonRoute53DomainsClient client = new AmazonRoute53DomainsClient();
             var domains = new Dictionary<string, RegisteredDomain>();
-            var client = new AmazonRoute53DomainsClient();
-
             ListDomainsResponse response;
-            ListDomainsRequest request = new ListDomainsRequest { MaxItems = 10 };
-
+            ListDomainsRequest request = new ListDomainsRequest { MaxItems = 100 };
             do
             {
                 response = await client.ListDomainsAsync(request, cancellationToken);
