@@ -21,7 +21,7 @@ namespace DomainMaintenance.Functions
         [FunctionName("DiscoverRegisteredDomains")]
 
         public async Task Run(
-            [TimerTrigger("*/30 * * * * *")] TimerInfo timer,
+            [TimerTrigger("0 0 10 * * *")] TimerInfo timer,
             [Table("domains")] TableClient table,
             CancellationToken cancellationToken,
             ILogger log)
