@@ -99,39 +99,27 @@ namespace DomainMaintenance.Functions
             }
         }
 
+        private static void LogEnvironment(ILogger log)
+        {
+            string[] environmentVariableNames = new[] { "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_DEFAULT_REGION" };
+            foreach (var environmentVariableName in environmentVariableNames)
+            {
+                var value = Environment.GetEnvironmentVariable(environmentVariableName);
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    log.LogInformation("{EnvironmentVariable}: missing", environmentVariableName);
+                }
+                else
+                {
+                    log.LogInformation("{EnvironmentVariable}: exists", environmentVariableName);
+                }
+            }
+        }
 
         private static async Task<Dictionary<string, RegisteredDomain>> DiscoverDomains(ILogger log, CancellationToken cancellationToken)
         {
-            var accessKeyId = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID");
-            var secretAccessKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY");
-            var region = Environment.GetEnvironmentVariable("AWS_REGION");
+            LogEnvironment(log);
 
-            if (string.IsNullOrWhiteSpace(accessKeyId))
-            {
-                log.LogInformation("The environment variable AWS_ACCESS_KEY_ID doesn't exist");
-            }
-            else
-            {
-                log.LogInformation("The environment variable AWS_ACCESS_KEY_ID is set");
-            }
-
-            if (string.IsNullOrWhiteSpace(secretAccessKey))
-            {
-                log.LogInformation("The environment variable AWS_SECRET_ACCESS_KEY doesn't exist");
-            }
-            else
-            {
-                log.LogInformation("The environment variable AWS_SECRET_ACCESS_KEY is set");
-            }
-
-            if (string.IsNullOrWhiteSpace(region))
-            {
-                log.LogInformation("The environment variable AWS_REGION doesn't exist");
-            }
-            else
-            {
-                log.LogInformation("The environment variable AWS_REGION is set");
-            }
 
             try
             {
