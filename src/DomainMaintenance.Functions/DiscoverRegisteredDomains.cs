@@ -79,19 +79,23 @@ namespace DomainMaintenance.Functions
             {
                 var domain = registered[domainName];
                 await table.AddEntityAsync(domain, cancellationToken);
+                log.LogInformation("Added '{DomainName}' to the cache", domainName);
             }
 
             foreach (var domainName in deleted)
             {
                 var domain = registered[domainName];
                 await table.DeleteEntityAsync(domain.PartitionKey, domain.RowKey, default, cancellationToken);
+                log.LogInformation("Deleted '{DomainName}' from the cache", domainName);
             }
 
             foreach (var domainName in updated)
             {
                 var other = cached[domainName];
                 var domain = registered[domainName];
+                
                 await table.UpdateEntityAsync(domain, Azure.ETag.All);
+                log.LogInformation("Updated '{DomainName}' in the cache", domainName);
             }
         }
 
@@ -100,7 +104,7 @@ namespace DomainMaintenance.Functions
         {
             var accessKeyId = Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID");
             var secretAccessKey = Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY");
-            var region = Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION");
+            var region = Environment.GetEnvironmentVariable("AWS_REGION");
 
             if (string.IsNullOrWhiteSpace(accessKeyId))
             {
@@ -122,29 +126,38 @@ namespace DomainMaintenance.Functions
 
             if (string.IsNullOrWhiteSpace(region))
             {
-                log.LogInformation("The environment variable AWS_DEFAULT_REGION doesn't exist");
+                log.LogInformation("The environment variable AWS_REGION doesn't exist");
             }
             else
             {
-                log.LogInformation("The environment variable AWS_DEFAULT_REGION is set");
+                log.LogInformation("The environment variable AWS_REGION is set");
             }
 
-            AmazonRoute53DomainsClient client = new AmazonRoute53DomainsClient();
-            var domains = new Dictionary<string, RegisteredDomain>();
-            ListDomainsResponse response;
-            ListDomainsRequest request = new ListDomainsRequest { MaxItems = 100 };
-            do
+            try
             {
-                response = await client.ListDomainsAsync(request, cancellationToken);
-                foreach (var domain in response.Domains)
+                AmazonRoute53DomainsClient client = new AmazonRoute53DomainsClient();
+                var domains = new Dictionary<string, RegisteredDomain>();
+                ListDomainsResponse response;
+                ListDomainsRequest request = new ListDomainsRequest { MaxItems = 100 };
+                do
                 {
-                    RegisteredDomain d = new RegisteredDomain(domain.DomainName, domain.Expiry, domain.AutoRenew, domain.TransferLock);
-                    domains.Add(d.DomainName, d);
-                }
-                request.Marker = response.NextPageMarker;
-            } while (!string.IsNullOrEmpty(response.NextPageMarker));
+                    log.LogInformation("Getting the list of domains registered in AWS Route53");
+                    response = await client.ListDomainsAsync(request, cancellationToken);
+                    foreach (var domain in response.Domains)
+                    {
+                        RegisteredDomain d = new RegisteredDomain(domain.DomainName, domain.Expiry, domain.AutoRenew, domain.TransferLock);
+                        domains.Add(d.DomainName, d);
+                    }
+                    request.Marker = response.NextPageMarker;
+                } while (!string.IsNullOrEmpty(response.NextPageMarker));
 
-            return domains;
+                return domains;
+            }
+            catch(AmazonRoute53DomainsException e)
+            {
+                log.LogError(e, "Error trying to get the list of domains: {Message} ({ErrorCode})", e.Message, e.ErrorCode);
+                throw;
+            }
         }
     }
 }
