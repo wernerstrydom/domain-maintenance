@@ -15,6 +15,7 @@ using System.Linq;
 using System.Collections.Immutable;
 using System.IO;
 using Amazon.Route53Domains.Model;
+using Humanizer;
 
 namespace DomainMaintenance.Functions
 {
@@ -100,25 +101,23 @@ namespace DomainMaintenance.Functions
         private static async Task Notify(ICollector<string> notificationQueue, ICollection registered, IEnumerable<string> added, IEnumerable<string> deleted, IEnumerable<string> updated)
         {
             StringWriter writer = new();
-            await writer.WriteLineAsync($"Processed {registered.Count} domains in the registrar:");
-            await writer.WriteLineAsync($"  Added:");
-            foreach (var domainName in added)
-            {
-                await writer.WriteLineAsync($"    {domainName}");
-            }
-
-            await writer.WriteLineAsync($"  Deleted: ");
-            foreach (var domainName in deleted)
-            {
-                await writer.WriteLineAsync($"    {domainName}");
-            }
-
-            await writer.WriteLineAsync($"  Updated:");
-            foreach (var domainName in updated)
-            {
-                await writer.WriteLineAsync($"    {domainName}");
-            }
-
+            await writer.WriteAsync($"Processing of '{registered.Count}' domains succeeded. ");
+            if(added.Any())
+                await writer.WriteAsync($"Scheduled {added.Humanize()} to be added. ");
+            else
+                await writer.WriteAsync("No domains to be added. ");
+            
+            
+            if(deleted.Any())
+                await writer.WriteAsync($"Scheduled {deleted.Humanize()} to deleted. ");
+            else 
+                await writer.WriteAsync("No domains to be deleted. ");
+            
+            if(updated.Any())
+                await writer.WriteAsync($"Successfully updated {updated.Humanize()}. ");
+            else 
+                await writer.WriteAsync("No domains to be updated. ");
+ 
             notificationQueue.Add(writer.ToString());
         }
 

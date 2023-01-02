@@ -60,7 +60,7 @@ namespace DomainMaintenance.Functions
             log.LogInformation("Updating domain '{DomainName}' with new contact details", domain);
             await client.SetDomainDetail(expected, domain);
             
-            notificationQueue.Add($"Domain '{domain}' has been updated with new contact details");
+            notificationQueue.Add($"Updating domain details for '{domain}' succeeded");
         }
     }
 
