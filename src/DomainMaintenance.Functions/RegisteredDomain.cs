@@ -29,62 +29,60 @@ using System.Collections.Generic;
 using Azure;
 using Azure.Data.Tables;
 
-namespace DomainMaintenance.Functions
+namespace DomainMaintenance.Functions;
+
+public class RegisteredDomain : ITableEntity, IEquatable<RegisteredDomain>
 {
-    public class RegisteredDomain : ITableEntity, IEquatable<RegisteredDomain>
+    public RegisteredDomain(string domainName, DateTime expiry, bool autoRenew, bool transferLock)
     {
-        public RegisteredDomain(string domainName, DateTime expiry, bool autoRenew, bool transferLock)
-        {
-            PartitionKey = "RegisteredDomain";
-            DomainName = domainName;
-            RowKey = domainName;
-            Expiry = expiry;
-            AutoRenew = autoRenew;
-            TransferLock = transferLock;
-        }
-
-        public RegisteredDomain()
-        {
-        }
-
-        public string DomainName { get; set; }
-        public DateTime Expiry { get; set; }
-        public bool AutoRenew { get; set; }
-        public bool TransferLock { get; set; }
-        public string PartitionKey { get; set; }
-        public string RowKey { get; set; }
-        public DateTimeOffset? Timestamp{ get; set; }
-        public ETag ETag { get; set; }
-
-        public override bool Equals(object obj)
-        {
-            return Equals(obj as RegisteredDomain);
-        }
-
-        public bool Equals(RegisteredDomain other)
-        {
-            return other is not null &&
-                   DomainName == other.DomainName &&
-                   Expiry == other.Expiry &&
-                   AutoRenew == other.AutoRenew &&
-                   TransferLock == other.TransferLock;
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(DomainName, Expiry, AutoRenew, TransferLock);
-        }
-
-        public static bool operator ==(RegisteredDomain left, RegisteredDomain right)
-        {
-            return EqualityComparer<RegisteredDomain>.Default.Equals(left, right);
-        }
-
-        public static bool operator !=(RegisteredDomain left, RegisteredDomain right)
-        {
-            return !(left == right);
-        }
+        PartitionKey = "RegisteredDomain";
+        DomainName = domainName;
+        RowKey = domainName;
+        Expiry = expiry;
+        AutoRenew = autoRenew;
+        TransferLock = transferLock;
     }
 
-}
+    public RegisteredDomain()
+    {
+    }
 
+    public string DomainName { get; set; }
+    public DateTime Expiry { get; set; }
+    public bool AutoRenew { get; set; }
+    public bool TransferLock { get; set; }
+
+    public bool Equals(RegisteredDomain other)
+    {
+        return other is not null &&
+               DomainName == other.DomainName &&
+               Expiry == other.Expiry &&
+               AutoRenew == other.AutoRenew &&
+               TransferLock == other.TransferLock;
+    }
+
+    public string PartitionKey { get; set; }
+    public string RowKey { get; set; }
+    public DateTimeOffset? Timestamp { get; set; }
+    public ETag ETag { get; set; }
+
+    public override bool Equals(object obj)
+    {
+        return Equals(obj as RegisteredDomain);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(DomainName, Expiry, AutoRenew, TransferLock);
+    }
+
+    public static bool operator ==(RegisteredDomain left, RegisteredDomain right)
+    {
+        return EqualityComparer<RegisteredDomain>.Default.Equals(left, right);
+    }
+
+    public static bool operator !=(RegisteredDomain left, RegisteredDomain right)
+    {
+        return !(left == right);
+    }
+}

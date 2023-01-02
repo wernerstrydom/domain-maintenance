@@ -1,90 +1,63 @@
 ﻿using System;
-using Amazon.Route53Domains;
-using Amazon.Route53Domains.Model;
-using System.Collections.Generic;
-using System.Threading;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Host;
-using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
-using System.Collections;
-using System.Reflection.Emit;
+using Amazon.Route53Domains;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Extensions.Logging;
 
-namespace DomainMaintenance.Functions
+namespace DomainMaintenance.Functions;
+
+public class UpdateDomainRegistrar
 {
-    public class UpdateDomainRegistrar
+    [FunctionName("UpdateDomainRegistrar")]
+    public async Task Run([QueueTrigger(Constant.RegistrarUpdateQueue)] string domain,
+        [Queue(Constant.NotificationQueueName)]
+        ICollector<string> notificationQueue,
+        [Table(Constant.ContactsTableName, "Contact", "default")]
+        Contact defaultContact,
+        [Table(Constant.ContactsTableName, "Contact", "{queueTrigger}")]
+        Contact domainContact,
+        ILogger log)
     {
-        [FunctionName("UpdateDomainRegistrar")]
-        public async Task Run([QueueTrigger(Constant.RegistrarUpdateQueue)]string domain, 
-            [Queue(Constant.NotificationQueueName)] ICollector<string> notificationQueue,
-            [Table(Constant.ContactsTableName, "Contact", "default")] Contact defaultContact, 
-            [Table(Constant.ContactsTableName, "Contact", "{queueTrigger}")] Contact domainContact, 
-            ILogger log)
-        {
-            if (log == null) throw new ArgumentNullException(nameof(log));
-            
-            if (string.IsNullOrWhiteSpace(domain))
-                throw new ArgumentException("Value cannot be null or whitespace.", nameof(domain));
-            
-            log.LogInformation("Checking the contact details for domain {DomainName}", domain);
-            
-            
-            if (domainContact == null)
-            {
-                log.LogInformation("No contact details found for domain '{DomainName}'. Using default contact details.", domain);
-                domainContact = defaultContact;
-            }
-            
-            if (defaultContact == null)
-            {
-                log.LogError("No default contact details found. Please add a default contact to the table storage.");
-                return;
-            }
+        if (log == null) throw new ArgumentNullException(nameof(log));
 
-            
-            var expected = new DomainDetail()
-            {
-                AdminContact = domainContact,
-                RegistrantContact = domainContact,
-                TechContact = domainContact,
-            };
-            
-            var client = new AmazonRoute53DomainsClient();
-            var actual = await client.GetDomainDetailAsync(domain);
-            if (actual == expected)
-            {
-                log.LogInformation("The contact details of domain '{DomainName}' is already up to date", domain);
-                return;
-            }
-            
-            log.LogInformation("Updating domain '{DomainName}' with new contact details", domain);
-            await client.SetDomainDetail(expected, domain);
-            
-            notificationQueue.Add($"Updating domain details for '{domain}' succeeded");
-        }
-    }
+        if (string.IsNullOrWhiteSpace(domain))
+            throw new ArgumentException("Value cannot be null or whitespace.", nameof(domain));
 
-    public static class AmazonRoute53DomainsClientExtensions
-    {
-        public static async Task<DomainDetail> GetDomainDetailAsync(this AmazonRoute53DomainsClient client, string domainName)
+        log.LogInformation("Checking the contact details for domain {DomainName}", domain);
+
+
+        if (domainContact == null)
         {
-            var response = await client.GetDomainDetailAsync(new GetDomainDetailRequest() { DomainName = domainName });
-            var result = response.ToDomainDetail();
-            return result;
+            log.LogInformation("No contact details found for domain '{DomainName}'. Using default contact details.",
+                domain);
+            domainContact = defaultContact;
         }
 
-        public static async Task SetDomainDetail(this AmazonRoute53DomainsClient client, DomainDetail expected, string domainName)
+        if (defaultContact == null)
         {
-            await client.UpdateDomainContactAsync(expected.ToUpdateDomainContactRequest(domainName));
+            log.LogError("No default contact details found. Please add a default contact to the table storage.");
+            return;
         }
-    }
-    
-    public static class JsonExtensions
-    {
-        public static string ToJson<T>(this T obj)
+
+
+        var expected = new DomainDetail
         {
-            return Newtonsoft.Json.JsonConvert.SerializeObject(obj, Newtonsoft.Json.Formatting.Indented);
+            AdminContact = domainContact,
+            RegistrantContact = domainContact,
+            TechContact = domainContact
+        };
+
+        var client = new AmazonRoute53DomainsClient();
+        var actual = await client.GetDomainDetailAsync(domain);
+        if (actual == expected)
+        {
+            log.LogInformation("The contact details of domain '{DomainName}' is already up to date", domain);
+            return;
         }
+
+        log.LogInformation("Updating domain '{DomainName}' with new contact details", domain);
+        await client.SetDomainDetail(expected, domain);
+
+        notificationQueue.Add($"Updating domain details for '{domain}' succeeded");
     }
 }
-
