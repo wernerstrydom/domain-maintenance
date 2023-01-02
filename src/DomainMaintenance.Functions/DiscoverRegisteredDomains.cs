@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using Azure.Data.Tables;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
@@ -12,30 +13,23 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
 using System.Collections.Immutable;
+using System.IO;
 using Amazon.Route53Domains.Model;
 
 namespace DomainMaintenance.Functions
 {
-    public static class Constant
-    {
-#if DEBUG
-        public const string CronExpression = "0/30 * * * * *";
-#else
-        public const string CronExpression = "0 0 19 * * *";
-#endif
-        public const string DomainsTableName = "domains";
-    }
-
     public class DiscoverRegisteredDomains
     {
         [FunctionName("DiscoverRegisteredDomains")]
         public async Task Run(
-            [TimerTrigger(Constant.CronExpression)] TimerInfo timer,
+            [TimerTrigger(Constant.DiscoverRegisteredDomainsCronExpression)] TimerInfo timer,
+            [Queue(Constant.NotificationQueueName)] ICollector<string> notificationQueue,
             [Table(Constant.DomainsTableName)] TableClient table,
+            [Queue(Constant.RegistrarUpdateQueue)] ICollector<string> registrarUpdateQueue,
             CancellationToken cancellationToken,
             ILogger log)
         {
-            var registered = await DiscoverDomains(log,cancellationToken);
+            var registered = await DiscoverDomains(log, cancellationToken);
 
             // we're using the table as a cache to know which domains we processed before
             var cached = await table.QueryAsync<RegisteredDomain>(maxPerPage: 1000).ToDictionaryAsync(d => d.DomainName).ConfigureAwait(false);
@@ -57,12 +51,14 @@ namespace DomainMaintenance.Functions
                         log.LogInformation($"{domainName} needs to be updated in cache");
                         updated.Add(domainName);
                     }
+                    registrarUpdateQueue.Add(domain.DomainName);
                 }
                 else
                 {
                     // needs to be added
                     log.LogInformation($"{domainName} does not exists in cache");
                     added.Add(domainName);
+                    registrarUpdateQueue.Add(domain.DomainName);
                 }
             }
 
@@ -94,9 +90,36 @@ namespace DomainMaintenance.Functions
                 var other = cached[domainName];
                 var domain = registered[domainName];
                 
-                await table.UpdateEntityAsync(domain, Azure.ETag.All);
+                await table.UpdateEntityAsync(domain, Azure.ETag.All, cancellationToken: cancellationToken);
                 log.LogInformation("Updated '{DomainName}' in the cache", domainName);
             }
+            
+            await Notify(notificationQueue, registered, added, deleted, updated);
+        }
+
+        private static async Task Notify(ICollector<string> notificationQueue, ICollection registered, IEnumerable<string> added, IEnumerable<string> deleted, IEnumerable<string> updated)
+        {
+            StringWriter writer = new();
+            await writer.WriteLineAsync($"Processed {registered.Count} domains in the registrar:");
+            await writer.WriteLineAsync($"  Added:");
+            foreach (var domainName in added)
+            {
+                await writer.WriteLineAsync($"    {domainName}");
+            }
+
+            await writer.WriteLineAsync($"  Deleted: ");
+            foreach (var domainName in deleted)
+            {
+                await writer.WriteLineAsync($"    {domainName}");
+            }
+
+            await writer.WriteLineAsync($"  Updated:");
+            foreach (var domainName in updated)
+            {
+                await writer.WriteLineAsync($"    {domainName}");
+            }
+
+            notificationQueue.Add(writer.ToString());
         }
 
         private static void LogEnvironment(ILogger log)
@@ -119,8 +142,6 @@ namespace DomainMaintenance.Functions
         private static async Task<Dictionary<string, RegisteredDomain>> DiscoverDomains(ILogger log, CancellationToken cancellationToken)
         {
             LogEnvironment(log);
-
-
             try
             {
                 AmazonRoute53DomainsClient client = new AmazonRoute53DomainsClient();
